@@ -337,6 +337,12 @@ if(WAYWALLEN_DISPLAY_BUILD_TESTS)
         target_compile_options(test_screen_identity PRIVATE
             -Wall -Wextra -Wpedantic)
         add_test(NAME test_screen_identity COMMAND test_screen_identity)
+
+        add_executable(test_reconnect_backoff tests/test_reconnect_backoff.cpp)
+        target_compile_features(test_reconnect_backoff PRIVATE cxx_std_17)
+        target_compile_options(test_reconnect_backoff PRIVATE
+            -Wall -Wextra -Wpedantic)
+        add_test(NAME test_reconnect_backoff COMMAND test_reconnect_backoff)
     endif()
 
     if(WAYWALLEN_DISPLAY_WITH_EGL)

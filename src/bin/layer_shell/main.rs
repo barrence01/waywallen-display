@@ -473,9 +473,9 @@ impl App {
             binding.next_redraw.lock().unwrap().take();
             binding.last_pushed_metrics.lock().unwrap().take();
             let mut presenter = binding.presenter.lock().unwrap();
-            if let Err(release_error) = presenter.discard_direct_frames(None) {
+            if let Err(release_error) = presenter.discard_pending_direct_frame(None) {
                 log::warn!(
-                    "[{}] release queued frames after disconnect failed: {release_error:#}",
+                    "[{}] release pending frame after disconnect failed: {release_error:#}",
                     binding.display_name
                 );
             }
@@ -2065,7 +2065,7 @@ unsafe extern "C" fn on_frame_ready(user_data: *mut c_void, f: *const sys::waywa
         );
         return;
     }
-    if let Err(error) = presenter.enqueue_direct_frame(f, &direct) {
+    if let Err(error) = presenter.replace_pending_direct_frame(display, f, &direct) {
         if let Err(release_error) = vulkan::discard_direct_frame(display, f) {
             log::warn!(
                 "[{}] discard rejected direct frame seq={} failed: {release_error:#}",
@@ -2074,7 +2074,7 @@ unsafe extern "C" fn on_frame_ready(user_data: *mut c_void, f: *const sys::waywa
             );
         }
         log::warn!(
-            "[{}] queue direct frame seq={} failed: {error:#}",
+            "[{}] replace pending direct frame seq={} failed: {error:#}",
             binding.display_name,
             f.seq
         );
@@ -2415,11 +2415,16 @@ fn run(socket: PathBuf, name_prefix: String) -> Result<()> {
             events: libc::POLLIN,
             revents: 0,
         });
-        poll_fds.push(libc::pollfd {
-            fd: app.watcher_commands.fd(),
-            events: libc::POLLIN,
-            revents: 0,
+        let watcher_index = app.watcher_commands.fd().map(|fd| {
+            let index = poll_fds.len();
+            poll_fds.push(libc::pollfd {
+                fd,
+                events: libc::POLLIN,
+                revents: 0,
+            });
+            index
         });
+        let display_start = poll_fds.len();
         poll_fds.extend(display_sources.iter().map(|(_, poll_fd)| *poll_fd));
 
         let poll_result = unsafe {
@@ -2445,12 +2450,14 @@ fn run(socket: PathBuf, name_prefix: String) -> Result<()> {
             drop(read_guard);
         }
 
-        if poll_fds[1].revents & (libc::POLLIN | libc::POLLERR | libc::POLLHUP) != 0 {
-            app.drain_watcher_commands();
+        if let Some(index) = watcher_index {
+            if poll_fds[index].revents & (libc::POLLIN | libc::POLLERR | libc::POLLHUP) != 0 {
+                app.drain_watcher_commands();
+            }
         }
         for ((output_name, _), poll_fd) in display_sources
             .into_iter()
-            .zip(poll_fds.into_iter().skip(2))
+            .zip(poll_fds.into_iter().skip(display_start))
         {
             if poll_fd.revents != 0 {
                 app.process_display_poll(output_name, poll_fd.revents);
