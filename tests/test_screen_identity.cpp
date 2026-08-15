@@ -34,6 +34,19 @@ static void test_serial_trims_and_differs_by_serial() {
     assert(left.id != right.id);
 }
 
+static void test_serial_beats_edid() {
+    const auto withSerial = makeKdeScreenIdentity("Dell", "U2720Q", "ABC", "DP-1", validEdid('A'));
+    const auto otherSerial =
+        makeKdeScreenIdentity("Dell", "U2720Q", "XYZ", "HDMI-A-1", validEdid('A'));
+    const auto noSerial =
+        makeKdeScreenIdentity("Dell", "U2720Q", QString(), "HDMI-A-1", validEdid('A'));
+    assert(withSerial.source == KdeScreenIdentity::Source::Serial);
+    assert(otherSerial.source == KdeScreenIdentity::Source::Serial);
+    assert(withSerial.id != otherSerial.id);
+    assert(noSerial.source == KdeScreenIdentity::Source::Edid);
+    assert(withSerial.id != noSerial.id);
+}
+
 static void test_edid_used_when_serial_empty() {
     const auto sameA = makeKdeScreenIdentity("Dell", "U2720Q", "  ", "DP-1", validEdid('A'));
     const auto sameB =
@@ -95,6 +108,7 @@ static void test_sysfs_skips_short_or_zero_edid() {
 int main() {
     test_serial_ignores_connector();
     test_serial_trims_and_differs_by_serial();
+    test_serial_beats_edid();
     test_edid_used_when_serial_empty();
     test_connector_last_resort();
     test_empty_inputs_yield_no_identity();

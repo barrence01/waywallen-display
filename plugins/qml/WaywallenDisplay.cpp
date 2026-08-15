@@ -5,6 +5,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDebug>
+#include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QMatrix4x4>
 #include <QMouseEvent>
@@ -140,6 +141,10 @@ public:
 
 namespace
 {
+constexpr int kIdentityRetryIntervalMs = 250;
+constexpr int kIdentityRetryWindowMs   = 5000;
+constexpr int kIdentityRetryMaxTicks   = kIdentityRetryWindowMs / kIdentityRetryIntervalMs;
+
 /* Tiny QRunnable adapter so cleanup() can post a render-thread shutdown
  * without keeping the QML item alive for the duration. The lib's
  * shutdown is bounded (close + 4 drain iterations + free), so no
@@ -526,6 +531,9 @@ WaywallenDisplay::WaywallenDisplay(QQuickItem* parent): QQuickItem(parent) {
     m_updateSizeTimer.setSingleShot(true);
     m_updateSizeTimer.setInterval(100);
     connect(&m_updateSizeTimer, &QTimer::timeout, this, &WaywallenDisplay::pushSizeUpdate);
+
+    m_identityRetryTimer.setInterval(kIdentityRetryIntervalMs);
+    connect(&m_identityRetryTimer, &QTimer::timeout, this, &WaywallenDisplay::onIdentityRetry);
 }
 
 WaywallenDisplay::~WaywallenDisplay() { cleanup(); }
@@ -764,10 +772,34 @@ KdeScreenIdentity WaywallenDisplay::liveScreenIdentity() const {
 void WaywallenDisplay::scheduleIdentityRetry() {
     if (! m_autoReconnect) return;
     if (m_identityRetryTimer.isActive()) return;
+    m_identityRetryAttempts = 0;
     m_identityRetryTimer.start();
 }
 
-void WaywallenDisplay::onIdentityRetry() { tryConnect(); }
+void WaywallenDisplay::onIdentityRetry() {
+    ++m_identityRetryAttempts;
+    tryConnect();
+    if (displayHandle() || m_identityRetryAttempts >= kIdentityRetryMaxTicks)
+        m_identityRetryTimer.stop();
+}
+
+void WaywallenDisplay::syncScreenRegistration() {
+    reconnectIfIdentityChanged();
+    onScreenMetricsChanged();
+}
+
+void WaywallenDisplay::onScreenMetricsChanged() {
+    if (displayHandle()) {
+        m_updateSizeTimer.start();
+        return;
+    }
+    auto* w = window();
+    if (! w || ! w->isSceneGraphInitialized()) {
+        scheduleIdentityRetry();
+        return;
+    }
+    QMetaObject::invokeMethod(this, &WaywallenDisplay::tryConnect, Qt::QueuedConnection);
+}
 
 void WaywallenDisplay::reconnectIfIdentityChanged() {
     if (! displayHandle()) return;
@@ -1149,11 +1181,22 @@ bool WaywallenDisplay::bindVulkanBackend() {
 void WaywallenDisplay::componentComplete() {
     QQuickItem::componentComplete();
     setupDBusWatcher();
-    if (window()) {
-        onWindowReady();
-    } else {
-        connect(this, &QQuickItem::windowChanged, this, &WaywallenDisplay::onWindowReady);
-    }
+    connect(this,
+            &QQuickItem::windowChanged,
+            this,
+            &WaywallenDisplay::onWindowReady,
+            Qt::UniqueConnection);
+    connect(qGuiApp,
+            &QGuiApplication::primaryScreenChanged,
+            this,
+            &WaywallenDisplay::syncScreenRegistration,
+            Qt::UniqueConnection);
+    connect(qGuiApp,
+            &QGuiApplication::screenRemoved,
+            this,
+            &WaywallenDisplay::syncScreenRegistration,
+            Qt::UniqueConnection);
+    if (window()) onWindowReady();
 }
 
 void WaywallenDisplay::setupDBusWatcher() {
@@ -1235,8 +1278,6 @@ void WaywallenDisplay::onWindowReady() {
         m_filterInstalled = true;
     }
 
-    if (displayHandle()) return;
-
     // sceneGraphInvalidated: SG is being torn down (window closing,
     // renderer reset, etc). Fires on render thread with DirectConnection.
     // We have to release GPU resources NOW — by the time this returns
@@ -1283,8 +1324,29 @@ void WaywallenDisplay::onWindowReady() {
             }
             m_textureCount  = 0;
             m_activeBackend = BackendNone;
+            QPointer<WaywallenDisplay> guard(this);
+            QMetaObject::invokeMethod(
+                this,
+                [guard]() {
+                    if (! guard) return;
+                    guard->setConnState(Disconnected);
+                    guard->setStreamState(Inactive);
+                    if (guard->m_displayId != 0) {
+                        guard->m_displayId = 0;
+                        emit guard->displayIdChanged();
+                    }
+                    guard->update();
+                    guard->scheduleIdentityRetry();
+                },
+                Qt::QueuedConnection);
         },
         Qt::DirectConnection);
+
+    connect(window(),
+            &QQuickWindow::sceneGraphInitialized,
+            this,
+            &WaywallenDisplay::tryConnect,
+            Qt::UniqueConnection);
 
     if (! window()->isSceneGraphInitialized()) {
         // Inject Vulkan device extensions needed for DMA-BUF import
@@ -1301,15 +1363,9 @@ void WaywallenDisplay::onWindowReady() {
         });
         window()->setGraphicsConfiguration(config);
         qCInfo(lcWD, "requested DMA-BUF Vulkan device extensions");
-
-        connect(window(),
-                &QQuickWindow::sceneGraphInitialized,
-                this,
-                &WaywallenDisplay::tryConnect,
-                Qt::UniqueConnection);
         return;
     }
-    tryConnect();
+    QMetaObject::invokeMethod(this, &WaywallenDisplay::tryConnect, Qt::QueuedConnection);
 }
 
 void WaywallenDisplay::onScreenChanged(QScreen* screen) {
@@ -1319,16 +1375,36 @@ void WaywallenDisplay::onScreenChanged(QScreen* screen) {
                 this,
                 &WaywallenDisplay::pushSizeUpdate,
                 Qt::UniqueConnection);
+        connect(screen,
+                &QScreen::geometryChanged,
+                this,
+                &WaywallenDisplay::onScreenMetricsChanged,
+                Qt::UniqueConnection);
+        connect(screen,
+                &QScreen::physicalSizeChanged,
+                this,
+                &WaywallenDisplay::onScreenMetricsChanged,
+                Qt::UniqueConnection);
     }
-    reconnectIfIdentityChanged();
-    if (displayHandle()) m_updateSizeTimer.start();
+    syncScreenRegistration();
 }
 
 void WaywallenDisplay::tryConnect() {
     if (displayHandle()) return;
+    auto* w = window();
+    if (w && ! w->isSceneGraphInitialized()) {
+        scheduleIdentityRetry();
+        return;
+    }
 
     const auto identity = liveScreenIdentity();
     if (identity.id.isEmpty()) {
+        scheduleIdentityRetry();
+        return;
+    }
+    if ((identity.source == KdeScreenIdentity::Source::Edid ||
+         identity.source == KdeScreenIdentity::Source::Connector) &&
+        m_identityRetryAttempts < kIdentityRetryMaxTicks) {
         scheduleIdentityRetry();
         return;
     }
@@ -1434,9 +1510,11 @@ void WaywallenDisplay::tryConnect() {
         QMutexLocker lock(&m_resourcesMutex);
         if (m_renderResources == resources) m_renderResources.reset();
         setConnState(Disconnected);
+        scheduleIdentityRetry();
         return;
     }
 
+    m_identityRetryTimer.stop();
     m_registeredInstanceId = identity.id;
     qCInfo(lcWD,
            "registering instance_id=%s source=%s",
@@ -1685,16 +1763,12 @@ void WaywallenDisplay::releaseEglFrame(int releaseSyncobjFd, bool afterGpuWork, 
 }
 
 void WaywallenDisplay::handleDisconnect(int errCode, const char* msg) {
-    qCWarning(lcWD,
-              "disconnected (err=%d msg=%s) — waiting for daemon DBus signal",
-              errCode,
-              msg ? msg : "(null)");
+    qCWarning(lcWD, "disconnected (err=%d msg=%s)", errCode, msg ? msg : "(null)");
     cleanup();
     setConnState(Disconnected);
     setStreamState(Inactive);
     update();
-    // No retry timer — wait for org.waywallen.waywallen.Daemon NameOwnerChanged
-    // / Ready signals to drive the next attempt (see setupDBusWatcher).
+    scheduleIdentityRetry();
 }
 
 // ---------------------------------------------------------------------------

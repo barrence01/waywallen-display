@@ -237,6 +237,8 @@ private:
     QString           effectiveInstanceId() const;
     void              scheduleIdentityRetry();
     void              reconnectIfIdentityChanged();
+    void              syncScreenRegistration();
+    void              onScreenMetricsChanged();
     uint32_t          screenRefreshMhz() const;
     void              reportFrameArmed(uint64_t generation, uint64_t seq);
     void signalFrameRelease(int fd, uint64_t generation, uint64_t seq, const char* context);
@@ -324,6 +326,7 @@ private:
     // Coalesces display mode changes into one metrics snapshot.
     QTimer   m_updateSizeTimer;
     QTimer   m_identityRetryTimer;
+    int      m_identityRetryAttempts { 0 };
     int      m_lastPushedWidth { -1 };
     int      m_lastPushedHeight { -1 };
     uint32_t m_lastPushedRefreshMhz { 0 };
