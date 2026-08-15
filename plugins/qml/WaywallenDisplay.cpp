@@ -2,7 +2,6 @@
 
 #include <waywallen_display.h>
 
-#include <QCryptographicHash>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDebug>
@@ -221,8 +220,6 @@ private:
         transformNode->appendChildNode(imageNode);
     }
 };
-
-QString screenPart(const QString& value) { return value.trimmed(); }
 } // namespace
 
 // Linux input event codes — matches wlroots / Wayland convention so
@@ -608,6 +605,7 @@ void WaywallenDisplay::cleanup() {
     }
 
     m_updateSizeTimer.stop();
+    m_identityRetryTimer.stop();
     m_lastPushedWidth  = -1;
     m_lastPushedHeight = -1;
 
@@ -744,26 +742,48 @@ void WaywallenDisplay::commitPresentedContent(uint64_t generation, int width, in
 // Properties
 // ---------------------------------------------------------------------------
 
-QString WaywallenDisplay::screenIdentityKey() const {
-    auto* w = window();
+QString WaywallenDisplay::effectiveInstanceId() const { return liveScreenIdentity().id; }
+
+QString WaywallenDisplay::instanceIdSource() const { return liveScreenIdentity().sourceName(); }
+
+KdeScreenIdentity WaywallenDisplay::liveScreenIdentity() const {
+    if (! m_instanceId.isEmpty()) {
+        KdeScreenIdentity identity;
+        identity.id     = m_instanceId;
+        identity.source = KdeScreenIdentity::Source::None;
+        return identity;
+    }
+
+    auto* w = this->window();
     auto* s = w ? w->screen() : nullptr;
     if (! s) return {};
-
-    return QStringLiteral("name=%1|manufacturer=%2|model=%3|serial=%4")
-        .arg(screenPart(s->name()),
-             screenPart(s->manufacturer()),
-             screenPart(s->model()),
-             screenPart(s->serialNumber()));
+    return makeKdeScreenIdentity(
+        s->manufacturer(), s->model(), s->serialNumber(), s->name(), kdeConnectedEdid(s->name()));
 }
 
-QString WaywallenDisplay::effectiveInstanceId() const {
-    if (! m_instanceId.isEmpty()) return m_instanceId;
+void WaywallenDisplay::scheduleIdentityRetry() {
+    if (! m_autoReconnect) return;
+    if (m_identityRetryTimer.isActive()) return;
+    m_identityRetryTimer.start();
+}
 
-    const auto key = screenIdentityKey();
-    if (key.isEmpty()) return {};
+void WaywallenDisplay::onIdentityRetry() { tryConnect(); }
 
-    const auto md5 = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Md5).toHex();
-    return QStringLiteral("kde-") + QString::fromLatin1(md5);
+void WaywallenDisplay::reconnectIfIdentityChanged() {
+    if (! displayHandle()) return;
+    const auto identity = liveScreenIdentity();
+    if (identity.id.isEmpty() || identity.id == m_registeredInstanceId) return;
+
+    qCInfo(lcWD,
+           "screen identity changed from %s to %s (%s); reconnecting",
+           qPrintable(m_registeredInstanceId),
+           qPrintable(identity.id),
+           qPrintable(identity.sourceName()));
+    cleanup();
+    m_registeredInstanceId.clear();
+    setConnState(Disconnected);
+    setStreamState(Inactive);
+    tryConnect();
 }
 
 uint32_t WaywallenDisplay::screenRefreshMhz() const {
@@ -1300,11 +1320,19 @@ void WaywallenDisplay::onScreenChanged(QScreen* screen) {
                 &WaywallenDisplay::pushSizeUpdate,
                 Qt::UniqueConnection);
     }
+    reconnectIfIdentityChanged();
     if (displayHandle()) m_updateSizeTimer.start();
 }
 
 void WaywallenDisplay::tryConnect() {
     if (displayHandle()) return;
+
+    const auto identity = liveScreenIdentity();
+    if (identity.id.isEmpty()) {
+        scheduleIdentityRetry();
+        return;
+    }
+
     setConnState(Connecting);
 
     waywallen_display_callbacks_t cb {};
@@ -1386,19 +1414,18 @@ void WaywallenDisplay::tryConnect() {
 
     const QByteArray                  sockPath   = m_socketPath.toUtf8();
     const QByteArray                  name       = m_displayName.toUtf8();
-    const QByteArray                  instanceId = effectiveInstanceId().toUtf8();
+    const QByteArray                  instanceId = identity.id.toUtf8();
     const uint32_t                    refreshMhz = screenRefreshMhz();
     const waywallen_display_metrics_t metrics {
         static_cast<uint32_t>(m_displayWidth),
         static_cast<uint32_t>(m_displayHeight),
         refreshMhz,
     };
-    int rc =
-        waywallen_display_begin_connect(display,
-                                        sockPath.isEmpty() ? nullptr : sockPath.constData(),
-                                        name.constData(),
-                                        instanceId.isEmpty() ? nullptr : instanceId.constData(),
-                                        &metrics);
+    int rc = waywallen_display_begin_connect(display,
+                                             sockPath.isEmpty() ? nullptr : sockPath.constData(),
+                                             name.constData(),
+                                             instanceId.constData(),
+                                             &metrics);
 
     if (rc != WAYWALLEN_OK) {
         qCWarning(lcWD, "begin_connect failed: %d (waiting for daemon DBus signal)", rc);
@@ -1409,6 +1436,13 @@ void WaywallenDisplay::tryConnect() {
         setConnState(Disconnected);
         return;
     }
+
+    m_registeredInstanceId = identity.id;
+    qCInfo(lcWD,
+           "registering instance_id=%s source=%s",
+           qPrintable(identity.id),
+           qPrintable(identity.sourceName()));
+    emit instanceIdChanged();
 
     // begin_connect carries these dims to the daemon as part of
     // register_display, so seed the dedupe so a same-size resize

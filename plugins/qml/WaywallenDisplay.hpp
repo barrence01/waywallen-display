@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PresentationState.hpp"
+#include "ScreenIdentity.hpp"
 
 #include <waywallen_display_protocol_types.h>
 
@@ -39,6 +40,7 @@ class WaywallenDisplay : public QQuickItem {
     Q_PROPERTY(QString socketPath READ socketPath WRITE setSocketPath NOTIFY socketPathChanged)
     Q_PROPERTY(QString displayName READ displayName WRITE setDisplayName NOTIFY displayNameChanged)
     Q_PROPERTY(QString instanceId READ instanceId WRITE setInstanceId NOTIFY instanceIdChanged)
+    Q_PROPERTY(QString instanceIdSource READ instanceIdSource NOTIFY instanceIdChanged)
     Q_PROPERTY(int displayWidth READ displayWidth WRITE setDisplayWidth NOTIFY displayWidthChanged)
     Q_PROPERTY(
         int displayHeight READ displayHeight WRITE setDisplayHeight NOTIFY displayHeightChanged)
@@ -130,6 +132,7 @@ public:
 
     QString instanceId() const { return effectiveInstanceId(); }
     void    setInstanceId(const QString& id);
+    QString instanceIdSource() const;
 
     int  displayWidth() const { return m_displayWidth; }
     void setDisplayWidth(int w);
@@ -211,6 +214,7 @@ private slots:
                                   const QString& newOwner);
     void onDaemonReadySignal();
     void pushSizeUpdate();
+    void onIdentityRetry();
 
 private:
     using ConfigSnapshot  = PresentationState::Config;
@@ -224,16 +228,18 @@ private:
     void                                    setupDBusWatcher();
     void                                    flushPendingRelease();
     void                                    handleDisconnect(int errCode, const char* msg);
-    void     applyPresentationSnapshot(const waywallen_presentation_snapshot_t& presentation);
-    void     applyPresentationState(const waywallen_presentation_state_t& state);
-    void     resetPresentation();
-    void     setConnState(ConnState s);
-    void     setStreamState(StreamState s);
-    QString  screenIdentityKey() const;
-    QString  effectiveInstanceId() const;
-    uint32_t screenRefreshMhz() const;
-    void     reportFrameArmed(uint64_t generation, uint64_t seq);
-    void     signalFrameRelease(int fd, uint64_t generation, uint64_t seq, const char* context);
+    void applyPresentationSnapshot(const waywallen_presentation_snapshot_t& presentation);
+    void applyPresentationState(const waywallen_presentation_state_t& state);
+    void resetPresentation();
+    void setConnState(ConnState s);
+    void setStreamState(StreamState s);
+    KdeScreenIdentity liveScreenIdentity() const;
+    QString           effectiveInstanceId() const;
+    void              scheduleIdentityRetry();
+    void              reconnectIfIdentityChanged();
+    uint32_t          screenRefreshMhz() const;
+    void              reportFrameArmed(uint64_t generation, uint64_t seq);
+    void signalFrameRelease(int fd, uint64_t generation, uint64_t seq, const char* context);
     /* Probe wants_writable and toggle m_notifierWrite::setEnabled.
      * Call after any post-handshake send that may have left bytes
      * queued in the lib's outbox (update_size, pointer events). */
@@ -277,6 +283,7 @@ private:
     QString          m_socketPath;
     QString          m_displayName { QStringLiteral("qml-display") };
     QString          m_instanceId;
+    QString          m_registeredInstanceId;
     int              m_displayWidth { 1920 };
     int              m_displayHeight { 1080 };
     int              m_framesReceived { 0 };
@@ -316,6 +323,7 @@ private:
 
     // Coalesces display mode changes into one metrics snapshot.
     QTimer   m_updateSizeTimer;
+    QTimer   m_identityRetryTimer;
     int      m_lastPushedWidth { -1 };
     int      m_lastPushedHeight { -1 };
     uint32_t m_lastPushedRefreshMhz { 0 };
