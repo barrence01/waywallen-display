@@ -8,16 +8,14 @@
 
 static QByteArray validEdid(char tag, int blocks = 1) {
     assert(blocks >= 1);
-    QByteArray bytes(128 * blocks, char(0));
+    QByteArray              bytes(128 * blocks, char(0));
     static constexpr quint8 kHeader[] = { 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
-    for (int i = 0; i < 8; ++i)
-        bytes[i] = static_cast<char>(kHeader[i]);
+    for (int i = 0; i < 8; ++i) bytes[i] = static_cast<char>(kHeader[i]);
     bytes[8] = tag;
     for (int block = 0; block < blocks; ++block) {
         quint8     sum = 0;
         const auto off = block * 128;
-        for (int i = 0; i < 127; ++i)
-            sum += static_cast<quint8>(bytes[off + i]);
+        for (int i = 0; i < 127; ++i) sum += static_cast<quint8>(bytes[off + i]);
         bytes[off + 127] = static_cast<char>(static_cast<quint8>(0u - sum));
     }
     assert(kdeEdidLooksValid(bytes));

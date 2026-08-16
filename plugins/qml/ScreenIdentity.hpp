@@ -39,8 +39,7 @@ inline bool kdeEdidLooksValid(const QByteArray& bytes) {
 
     for (qsizetype offset = 0; offset < bytes.size(); offset += 128) {
         quint8 sum = 0;
-        for (qsizetype i = 0; i < 128; ++i)
-            sum += static_cast<quint8>(bytes[offset + i]);
+        for (qsizetype i = 0; i < 128; ++i) sum += static_cast<quint8>(bytes[offset + i]);
         if (sum != 0) return false;
     }
     return true;
