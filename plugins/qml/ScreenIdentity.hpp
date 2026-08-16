@@ -77,12 +77,12 @@ inline KdeScreenIdentity makeKdeScreenIdentity(const QString& manufacturer, cons
 
     QByteArray        payload;
     KdeScreenIdentity identity;
-    if (! ser.isEmpty()) {
-        payload = QStringLiteral("manufacturer=%1|model=%2|serial=%3").arg(mfg, mdl, ser).toUtf8();
-        identity.source = KdeScreenIdentity::Source::Serial;
-    } else if (kdeEdidLooksValid(edid)) {
+    if (kdeEdidLooksValid(edid)) {
         payload         = edid;
         identity.source = KdeScreenIdentity::Source::Edid;
+    } else if (! ser.isEmpty()) {
+        payload = QStringLiteral("manufacturer=%1|model=%2|serial=%3").arg(mfg, mdl, ser).toUtf8();
+        identity.source = KdeScreenIdentity::Source::Serial;
     } else if (! conn.isEmpty()) {
         payload         = QStringLiteral("connector=%1").arg(conn).toUtf8();
         identity.source = KdeScreenIdentity::Source::Connector;

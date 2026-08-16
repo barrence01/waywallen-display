@@ -28,23 +28,24 @@ static void test_serial_ignores_connector() {
 }
 
 static void test_serial_trims_and_differs_by_serial() {
-    const auto left  = makeKdeScreenIdentity("  Dell ", "U2720Q", " AAA ", "DP-1", validEdid('x'));
-    const auto right = makeKdeScreenIdentity("Dell", "U2720Q", "BBB", "DP-1", validEdid('x'));
+    const auto left  = makeKdeScreenIdentity("  Dell ", "U2720Q", " AAA ", "DP-1", {});
+    const auto right = makeKdeScreenIdentity("Dell", "U2720Q", "BBB", "DP-1", {});
     assert(left.source == KdeScreenIdentity::Source::Serial);
     assert(left.id != right.id);
 }
 
-static void test_serial_beats_edid() {
+static void test_edid_beats_serial() {
     const auto withSerial = makeKdeScreenIdentity("Dell", "U2720Q", "ABC", "DP-1", validEdid('A'));
     const auto otherSerial =
         makeKdeScreenIdentity("Dell", "U2720Q", "XYZ", "HDMI-A-1", validEdid('A'));
-    const auto noSerial =
-        makeKdeScreenIdentity("Dell", "U2720Q", QString(), "HDMI-A-1", validEdid('A'));
-    assert(withSerial.source == KdeScreenIdentity::Source::Serial);
-    assert(otherSerial.source == KdeScreenIdentity::Source::Serial);
-    assert(withSerial.id != otherSerial.id);
-    assert(noSerial.source == KdeScreenIdentity::Source::Edid);
-    assert(withSerial.id != noSerial.id);
+    const auto otherEdid =
+        makeKdeScreenIdentity("Dell", "U2720Q", "ABC", "HDMI-A-1", validEdid('B'));
+    assert(withSerial.source == KdeScreenIdentity::Source::Edid);
+    assert(otherSerial.source == KdeScreenIdentity::Source::Edid);
+    assert(withSerial.sourceName() == QStringLiteral("edid"));
+    assert(withSerial.id == otherSerial.id);
+    assert(otherEdid.source == KdeScreenIdentity::Source::Edid);
+    assert(withSerial.id != otherEdid.id);
 }
 
 static void test_edid_used_when_serial_empty() {
@@ -108,7 +109,7 @@ static void test_sysfs_skips_short_or_zero_edid() {
 int main() {
     test_serial_ignores_connector();
     test_serial_trims_and_differs_by_serial();
-    test_serial_beats_edid();
+    test_edid_beats_serial();
     test_edid_used_when_serial_empty();
     test_connector_last_resort();
     test_empty_inputs_yield_no_identity();

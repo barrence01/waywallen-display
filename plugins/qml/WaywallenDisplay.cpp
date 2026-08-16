@@ -147,7 +147,7 @@ public:
 
 namespace
 {
-constexpr int kIdentityRetryIntervalMs = 250;
+constexpr int kIdentityRetryIntervalMs = 500;
 constexpr int kIdentityRetryWindowMs   = 5000;
 constexpr int kIdentityRetryMaxTicks   = kIdentityRetryWindowMs / kIdentityRetryIntervalMs;
 
@@ -1440,7 +1440,7 @@ void WaywallenDisplay::tryConnect() {
         scheduleIdentityRetry();
         return;
     }
-    if ((identity.source == KdeScreenIdentity::Source::Edid ||
+    if ((identity.source == KdeScreenIdentity::Source::Serial ||
          identity.source == KdeScreenIdentity::Source::Connector) &&
         m_identityRetryAttempts < kIdentityRetryMaxTicks) {
         scheduleIdentityRetry();
