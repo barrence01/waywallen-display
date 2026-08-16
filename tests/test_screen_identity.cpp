@@ -6,9 +6,21 @@
 #include <cassert>
 #include <cstdio>
 
-static QByteArray validEdid(char tag) {
-    QByteArray bytes(128, char(0));
-    bytes[0] = tag;
+static QByteArray validEdid(char tag, int blocks = 1) {
+    assert(blocks >= 1);
+    QByteArray bytes(128 * blocks, char(0));
+    static constexpr quint8 kHeader[] = { 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+    for (int i = 0; i < 8; ++i)
+        bytes[i] = static_cast<char>(kHeader[i]);
+    bytes[8] = tag;
+    for (int block = 0; block < blocks; ++block) {
+        quint8     sum = 0;
+        const auto off = block * 128;
+        for (int i = 0; i < 127; ++i)
+            sum += static_cast<quint8>(bytes[off + i]);
+        bytes[off + 127] = static_cast<char>(static_cast<quint8>(0u - sum));
+    }
+    assert(kdeEdidLooksValid(bytes));
     return bytes;
 }
 
@@ -77,6 +89,34 @@ static void test_empty_inputs_yield_no_identity() {
     assert(none.sourceName().isEmpty());
 }
 
+static void test_edid_rejects_short_zero_header_and_checksum() {
+    assert(! kdeEdidLooksValid({}));
+    assert(! kdeEdidLooksValid(QByteArray("tiny")));
+    assert(! kdeEdidLooksValid(QByteArray(200, char(1))));
+    assert(! kdeEdidLooksValid(QByteArray(128, char(0))));
+
+    auto badHeader = validEdid('A');
+    badHeader[0]   = static_cast<char>(0x11);
+    assert(! kdeEdidLooksValid(badHeader));
+
+    auto badChecksum = validEdid('A');
+    badChecksum[127] = static_cast<char>(static_cast<quint8>(badChecksum[127]) + 1);
+    assert(! kdeEdidLooksValid(badChecksum));
+
+    assert(kdeEdidLooksValid(validEdid('A')));
+    assert(kdeEdidLooksValid(validEdid('B', 2)));
+}
+
+static void test_sysfs_exact_connector_path() {
+    QTemporaryDir tmp;
+    assert(tmp.isValid());
+    const QString exact = tmp.path() + QStringLiteral("/DP-2");
+    assert(QDir().mkpath(exact));
+    const auto edid = validEdid('e');
+    writeFile(exact + QStringLiteral("/edid"), edid);
+    assert(kdeConnectedEdid(QStringLiteral("DP-2"), tmp.path()) == edid);
+}
+
 static void test_sysfs_edid_prefers_connected_output() {
     QTemporaryDir tmp;
     assert(tmp.isValid());
@@ -91,6 +131,20 @@ static void test_sysfs_edid_prefers_connected_output() {
 
     const auto bytes = kdeConnectedEdid(QStringLiteral("DP-1"), tmp.path());
     assert(bytes == validEdid('y'));
+}
+
+static void test_sysfs_ambiguous_connected_cards_are_empty() {
+    QTemporaryDir tmp;
+    assert(tmp.isValid());
+    const QString card0 = tmp.path() + QStringLiteral("/card0-DP-1");
+    const QString card1 = tmp.path() + QStringLiteral("/card1-DP-1");
+    assert(QDir().mkpath(card0));
+    assert(QDir().mkpath(card1));
+    writeFile(card0 + QStringLiteral("/status"), QByteArray("connected\n"));
+    writeFile(card0 + QStringLiteral("/edid"), validEdid('x', 1));
+    writeFile(card1 + QStringLiteral("/status"), QByteArray("connected\n"));
+    writeFile(card1 + QStringLiteral("/edid"), validEdid('y', 2));
+    assert(kdeConnectedEdid(QStringLiteral("DP-1"), tmp.path()).isEmpty());
 }
 
 static void test_sysfs_skips_short_or_zero_edid() {
@@ -113,7 +167,10 @@ int main() {
     test_edid_used_when_serial_empty();
     test_connector_last_resort();
     test_empty_inputs_yield_no_identity();
+    test_edid_rejects_short_zero_header_and_checksum();
+    test_sysfs_exact_connector_path();
     test_sysfs_edid_prefers_connected_output();
+    test_sysfs_ambiguous_connected_cards_are_empty();
     test_sysfs_skips_short_or_zero_edid();
     std::puts("test_screen_identity: OK");
     return 0;
