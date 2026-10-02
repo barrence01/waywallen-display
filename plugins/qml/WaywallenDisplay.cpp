@@ -1268,14 +1268,11 @@ void WaywallenDisplay::onWindowReady() {
             &WaywallenDisplay::onAfterFrameEnd,
             Qt::UniqueConnection);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 11, 0)
-    connect(
-        window(),
-        &QQuickWindow::devicePixelRatioChanged,
-        this,
-        [this]() {
-            emit effectiveDevicePixelRatioChanged();
-        },
-        Qt::UniqueConnection);
+    connect(window(),
+            &QQuickWindow::devicePixelRatioChanged,
+            this,
+            &WaywallenDisplay::effectiveDevicePixelRatioChanged,
+            Qt::UniqueConnection);
 #endif
     onScreenChanged(window()->screen());
 
