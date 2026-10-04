@@ -165,12 +165,21 @@ class LiveWallpaper extends St.Widget {
             if (!content)
                 return;
             if (dim) {
-                if (this._origBrightness === undefined)
+                if (this._origBrightness === undefined) {
                     this._origBrightness = content.brightness;
+                    this._origVignette = content.vignette;
+                }
+                // Mutter only applies brightness when vignette is enabled
+                // (see meta-background-content.c); without this line the
+                // dim is a no-op on overview workspace previews and the
+                // gsettings wallpaper bleeds through the clone's alpha.
+                content.vignette = true;
                 content.brightness = 0;
             } else if (this._origBrightness !== undefined) {
+                content.vignette = this._origVignette;
                 content.brightness = this._origBrightness;
                 this._origBrightness = undefined;
+                this._origVignette = undefined;
             }
         } catch (_e) {}
     }
