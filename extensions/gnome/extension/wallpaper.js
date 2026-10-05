@@ -37,7 +37,7 @@ const FADE_IN_MS = 800;
 export const LiveWallpaper = GObject.registerClass(
 class LiveWallpaper extends St.Widget {
     _init(backgroundActor, role = WallpaperRole.Other, rendererAvailable = false,
-        rendererLauncher = null) {
+        rendererLauncher = null, onDestroyed = null) {
         super._init({
             // FixedLayout: we position the clone ourselves in vfunc_allocate
             // (top-left origin, scaled to fill). BinLayout centered the
@@ -60,6 +60,15 @@ class LiveWallpaper extends St.Widget {
         this._rendererLauncher = rendererLauncher;
         this._presentation = null;
         this._blurController = null;
+        this._wwDestroyed = false;
+        this._onDestroyed = onDestroyed;
+        this._destroyId = this.connect('destroy', () => this._cleanup());
+        this._backgroundDestroyId = backgroundActor.connect('destroy', () => {
+            // The parent is disposing; do not read its content during child teardown.
+            this._backgroundActor = null;
+            this._backgroundDestroyId = 0;
+            this._cleanup();
+        });
 
         backgroundActor.layout_manager = new Clutter.BinLayout();
         backgroundActor.add_child(this);
@@ -103,6 +112,8 @@ class LiveWallpaper extends St.Widget {
     }
 
     _tryAttach() {
+        if (this._wwDestroyed || this._cloneActor)
+            return;
         if (!this._rendererAvailable) {
             this._showFallback();
             return;
@@ -116,6 +127,9 @@ class LiveWallpaper extends St.Widget {
             this._cloneDestroyId = this._cloneActor.connect('destroy', () => {
                 this._cloneActor = null;
                 this._cloneDestroyId = 0;
+                this._detachRenderer();
+                this._showFallback();
+                this._schedulePoll();
             });
             this._sourceActor = renderer;
             this._sourceDestroyId = renderer.connect('destroy',
@@ -142,7 +156,7 @@ class LiveWallpaper extends St.Widget {
     }
 
     _schedulePoll() {
-        if (this._pollId !== 0 || !this._rendererAvailable)
+        if (this._wwDestroyed || this._pollId !== 0 || !this._rendererAvailable)
             return;
         this._pollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             this._pollId = 0;
@@ -187,6 +201,16 @@ class LiveWallpaper extends St.Widget {
     _onSourceDestroyed() {
         this._sourceDestroyId = 0;
         this._sourceActor = null;
+        this._detachRenderer();
+        this._showFallback();
+        this._schedulePoll();
+    }
+
+    _detachRenderer() {
+        if (this._sourceActor && this._sourceDestroyId)
+            this._sourceActor.disconnect(this._sourceDestroyId);
+        this._sourceActor = null;
+        this._sourceDestroyId = 0;
         this._blurController?.destroy();
         this._blurController = null;
         if (this._cloneActor) {
@@ -198,11 +222,11 @@ class LiveWallpaper extends St.Widget {
             }
             try { clone.destroy(); } catch (_e) {}
         }
-        this._showFallback();
-        this._schedulePoll();
     }
 
     _showFallback() {
+        if (this._wwDestroyed)
+            return;
         this._cloneActor?.remove_all_transitions();
         if (this._cloneActor)
             this._cloneActor.opacity = 0;
@@ -216,10 +240,12 @@ class LiveWallpaper extends St.Widget {
     }
 
     setRendererAvailable(available) {
-        if (this._rendererAvailable === available)
+        if (this._wwDestroyed || this._rendererAvailable === available)
             return;
         this._rendererAvailable = available;
         if (!available) {
+            this._cancelPoll();
+            this._detachRenderer();
             this._showFallback();
             return;
         }
@@ -230,13 +256,20 @@ class LiveWallpaper extends St.Widget {
                 duration: FADE_IN_MS,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
+            this._dimBackdrop(true);
             return;
         }
         this._tryAttach();
     }
 
     setRendererLauncher(launcher) {
+        if (this._wwDestroyed || this._rendererLauncher === launcher)
+            return;
+        this._cancelPoll();
+        this._detachRenderer();
         this._rendererLauncher = launcher;
+        this._showFallback();
+        this._tryAttach();
     }
 
     _findRenderer() {
@@ -260,7 +293,7 @@ class LiveWallpaper extends St.Widget {
     }
 
     setPresentation(presentation) {
-        if (this._role !== WallpaperRole.Desktop)
+        if (this._wwDestroyed || this._role !== WallpaperRole.Desktop)
             return;
         this._presentation = presentation;
         this._applyPresentation();
@@ -286,29 +319,32 @@ class LiveWallpaper extends St.Widget {
             presentation.config.pauseEffect.blur.radius);
     }
 
-    on_destroy() {
-        // Mark first so GnomeShellOverride.disable() can skip us when GNOME
-        // has already destroyed our parent backgroundActor — avoids the
-        // "already disposed" warning (and any GC-sweep jitter) from a
-        // redundant second destroy() at extension teardown.
-        this._wwDestroyed = true;
+    _cancelPoll() {
         if (this._pollId) {
             GLib.source_remove(this._pollId);
             this._pollId = 0;
         }
-        if (this._sourceActor && this._sourceDestroyId) {
-            try { this._sourceActor.disconnect(this._sourceDestroyId); } catch (_e) {}
-        }
-        this._sourceActor = null;
-        this._sourceDestroyId = 0;
-        this._blurController?.destroy();
-        this._blurController = null;
-        if (this._cloneActor && this._cloneDestroyId) {
-            try { this._cloneActor.disconnect(this._cloneDestroyId); } catch (_e) {}
-            this._cloneDestroyId = 0;
-        }
-        this._cloneActor = null;
+    }
+
+    _cleanup() {
+        if (this._wwDestroyed)
+            return;
+        this._wwDestroyed = true;
+        const onDestroyed = this._onDestroyed;
+        this._onDestroyed = null;
+        onDestroyed?.(this);
+        this._cancelPoll();
+        this._detachRenderer();
         this._dimBackdrop(false);
-        super.on_destroy?.();
+        if (this._backgroundActor && this._backgroundDestroyId)
+            this._backgroundActor.disconnect(this._backgroundDestroyId);
+        this._backgroundDestroyId = 0;
+        this._backgroundActor = null;
+        this._rendererLauncher = null;
+        this._presentation = null;
+        if (this._destroyId) {
+            this.disconnect(this._destroyId);
+            this._destroyId = 0;
+        }
     }
 });

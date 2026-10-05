@@ -19,12 +19,7 @@ export class GnomeShellOverride {
     constructor(settings) {
         this._injection = new InjectionManager();
         this._settings = settings;
-        // Held by LiveWallpaper -> nothing; we only iterate on disable
-        // and let Clutter destruction cascades clean up otherwise.
-        // Using a Set (not Map) means we don't need to wire a destroy
-        // signal here — wiring one risks Gjs-CRITICAL during GC sweep
-        // (the handler can fire after the JS context is being torn
-        // down). Stale entries are pruned at disable() / on next switch.
+        // LiveWallpaper unregisters itself before releasing its actors and callbacks.
         this._wallpaperActors = new Set();
         this._desktopPresentation = new Map();
         this._rendererAvailable = false;
@@ -43,7 +38,8 @@ export class GnomeShellOverride {
                     ? Wallpaper.WallpaperRole.Desktop
                     : Wallpaper.WallpaperRole.Other;
                 this.waywallenActor = new Wallpaper.LiveWallpaper(
-                    backgroundActor, role, self._rendererAvailable, self._rendererLauncher);
+                    backgroundActor, role, self._rendererAvailable, self._rendererLauncher,
+                    actor => self._wallpaperActors.delete(actor));
                 self._wallpaperActors.add(this.waywallenActor);
                 if (role === Wallpaper.WallpaperRole.Desktop)
                     self._applyPresentationToActor(this.waywallenActor);
@@ -163,13 +159,6 @@ export class GnomeShellOverride {
         this._wallpaperActors.clear();
         this._desktopPresentation.clear();
         for (const a of actors) {
-            // Skip LiveWallpapers GNOME already destroyed (their on_destroy
-            // ran and cleaned up); only destroy the still-live ones, so we
-            // never touch an already-disposed object at teardown.
-            let alreadyGone = false;
-            try { alreadyGone = !!a._wwDestroyed; } catch (_e) { alreadyGone = true; }
-            if (alreadyGone)
-                continue;
             try { a.destroy(); } catch (_e) {}
         }
         this._teardownOverviewBackdrop();
