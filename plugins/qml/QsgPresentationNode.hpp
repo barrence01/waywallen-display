@@ -28,6 +28,9 @@ public:
     };
 
     static PresentationNode* create(QQuickWindow* window);
+    static void configureImage(QSGImageNode* imageNode, QSGTransformNode* transformNode,
+                               const waywallen_presentation_content_t& content,
+                               const QRectF& bounds, int displayWidth, int displayHeight);
 
     void installTexture(QSGTexture* texture, TextureBackend backend, quintptr handle,
                         const QSize& size);
@@ -61,12 +64,9 @@ private:
     TransitionNode(qulonglong serial, QSGRectangleNode* outgoingClear, QSGTexture* outgoingTexture,
                    QSGImageNode* outgoingNode, QSGRectangleNode* incomingClear,
                    QSGTexture* incomingTexture, QSGImageNode* incomingNode);
-    static void configureImage(QSGImageNode* imageNode, QSGTransformNode* transformNode,
-                               const waywallen_presentation_content_t& content,
-                               const QRectF& bounds, int displayWidth, int displayHeight);
-    void        updateClip(WaywallenDisplay::TransitionKind kind, qreal progress, quint32 angle,
-                           const QPointF& origin, const QRectF& bounds);
-    void        setClipPolygon(const QVector<QPointF>& polygon);
+    void updateClip(WaywallenDisplay::TransitionKind kind, qreal progress, quint32 angle,
+                    const QPointF& origin, const QRectF& bounds);
+    void setClipPolygon(const QVector<QPointF>& polygon);
 
     qulonglong        m_serial { 0 };
     QSGRectangleNode* m_outgoingClear { nullptr };

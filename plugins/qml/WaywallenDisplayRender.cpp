@@ -820,46 +820,8 @@ QSGNode* WaywallenDisplay::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData
 #endif
     }
 
-    const QRectF sourceRect = qtRect(presented.config.source_rect);
-    const QRectF destRect   = qtRect(presented.config.dest_rect);
-    if (sourceRect.width() > 0 && sourceRect.height() > 0) {
-        node->setSourceRect(sourceRect);
-    } else {
-        node->setSourceRect(QRectF(0, 0, presented.width, presented.height));
-    }
-
-    if (destRect.width() > 0 && destRect.height() > 0 && m_displayWidth > 0 &&
-        m_displayHeight > 0) {
-        const qreal sx = bounds.width() / qreal(m_displayWidth);
-        const qreal sy = bounds.height() / qreal(m_displayHeight);
-        node->setRect(QRectF(
-            destRect.x() * sx, destRect.y() * sy, destRect.width() * sx, destRect.height() * sy));
-    } else {
-        node->setRect(bounds);
-    }
-
-    // Build the rotation matrix: rotate the pre-rotation dest rect
-    // (sized boundsH × boundsW for 90°/270°, boundsW × boundsH for
-    // 0°/180°) around the post-rotation display center so it lands
-    // back inside the item's bounds. Qt's QMatrix4x4 rotation around
-    // +Z is visually CW in screen coords (Y points down), which is
-    // exactly how `Rotation::Cw*` is meant to be displayed.
-    QMatrix4x4 mat;
-    if (presented.config.transform != 0) {
-        const qreal w        = bounds.width();
-        const qreal h        = bounds.height();
-        const bool swap_dims = (presented.config.transform == 1 || presented.config.transform == 3);
-        const qreal pre_w    = swap_dims ? h : w;
-        const qreal pre_h    = swap_dims ? w : h;
-        const float angle    = static_cast<float>(presented.config.transform * 90u);
-        mat.translate(static_cast<float>(w / 2.0), static_cast<float>(h / 2.0));
-        mat.rotate(angle, 0.0f, 0.0f, 1.0f);
-        mat.translate(static_cast<float>(-pre_w / 2.0), static_cast<float>(-pre_h / 2.0));
-    }
-    if (xformNode->matrix() != mat) {
-        xformNode->setMatrix(mat);
-        xformNode->markDirty(QSGNode::DirtyMatrix);
-    }
+    PresentationNode::configureImage(
+        node, xformNode, presented, bounds, m_displayWidth, m_displayHeight);
 
     m_presentedLastFrameSlot   = frameSlot;
     m_presentedLastFrameSerial = frameSerial;

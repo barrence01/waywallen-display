@@ -112,19 +112,19 @@ void TransitionNode::updateScene(WaywallenDisplay::TransitionKind kind, qreal pr
                                  int displayWidth, int displayHeight) {
     m_outgoingClear->setRect(bounds);
     m_outgoingClear->setColor(qtColor(outgoingContent.config.clear_color));
-    configureImage(
+    PresentationNode::configureImage(
         m_outgoingNode, m_outgoingTransform, outgoingContent, bounds, displayWidth, displayHeight);
 
     m_incomingClear->setRect(bounds);
     m_incomingClear->setColor(qtColor(incomingContent.config.clear_color));
-    configureImage(
+    PresentationNode::configureImage(
         m_incomingNode, m_incomingTransform, incomingContent, bounds, displayWidth, displayHeight);
     updateClip(kind, progress, angle, origin, bounds);
 }
 
-void TransitionNode::configureImage(QSGImageNode* imageNode, QSGTransformNode* transformNode,
-                                    const waywallen_presentation_content_t& content,
-                                    const QRectF& bounds, int displayWidth, int displayHeight) {
+void PresentationNode::configureImage(QSGImageNode* imageNode, QSGTransformNode* transformNode,
+                                      const waywallen_presentation_content_t& content,
+                                      const QRectF& bounds, int displayWidth, int displayHeight) {
     const QRectF sourceRect = qtRect(content.config.source_rect);
     const QRectF destRect   = qtRect(content.config.dest_rect);
     if (sourceRect.width() > 0 && sourceRect.height() > 0) {
@@ -142,23 +142,7 @@ void TransitionNode::configureImage(QSGImageNode* imageNode, QSGTransformNode* t
         imageNode->setRect(bounds);
     }
 
-    QMatrix4x4 matrix;
-    if (content.config.transform != 0) {
-        const qreal width     = bounds.width();
-        const qreal height    = bounds.height();
-        const bool  swap      = content.config.transform == 1 || content.config.transform == 3 ||
-                                content.config.transform == 5 || content.config.transform == 7;
-        const qreal preWidth  = swap ? height : width;
-        const qreal preHeight = swap ? width : height;
-        const auto  transform = content.config.transform;
-        matrix.translate(static_cast<float>(width / 2.0), static_cast<float>(height / 2.0));
-        if (transform >= 4) matrix.scale(-1.0f, 1.0f);
-        matrix.rotate(static_cast<float>((transform >= 4 ? transform - 4 : transform) * 90u),
-                      0.0f,
-                      0.0f,
-                      1.0f);
-        matrix.translate(static_cast<float>(-preWidth / 2.0), static_cast<float>(-preHeight / 2.0));
-    }
+    const auto matrix = qtCompositionTransform(content.config.transform, bounds.size());
     if (transformNode->matrix() != matrix) {
         transformNode->setMatrix(matrix);
         transformNode->markDirty(QSGNode::DirtyMatrix);
