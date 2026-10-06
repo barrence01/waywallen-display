@@ -14,7 +14,7 @@ Linux 桌面环境把 `waywallen` 的壁纸输出当作普通 surface 显示，�
   `WaywallenSurface` 组件。
 - **gobject 插件** —— 通过 `waywallen-display` 构建 `GdkTexture` 的 helper。
 - **KDE Plasma 壁纸扩展** —— 基于 QML 插件的 Plasma 6 kpackage。
-- **GNOME Shell 扩展** —— 基于 gobject 插件的 Shell 48+ 扩展。
+- **GNOME Shell 扩展** —— 基于 gobject 插件的 Shell 48–51 扩展。
 - **Wayland layer-shell 客户端** —— 面向暴露 `zwlr_layer_shell_v1` 的
   compositor 的独立壁纸客户端。
 
@@ -58,7 +58,7 @@ kpackagetool6 --type Plasma/Wallpaper -i waywallen-kde-<版本>-<架构>-embed.z
 
 ### GNOME Shell 扩展
 
-GNOME Shell（Wayland，实测于 Shell 50）。
+GNOME Shell 48–51（Wayland，实测于 Shell 50 和 51）。
 从最新 release 下载 `waywallen-gnome-<版本>-<架构>.zip`，然后：
 
 ```sh
@@ -97,7 +97,7 @@ waywallen-layer-shell --socket "$XDG_RUNTIME_DIR/waywallen/display.sock"
 | 扩展 | 说明 |
 |------------|----------|
 | [kde](./extensions/kde) | Plasma 6 壁纸插件 |
-| [gnome](./extensions/gnome) | GNOME Shell 48–50 扩展（Wayland） |
+| [gnome](./extensions/gnome) | GNOME Shell 48–51 扩展（Wayland） |
 | layer-shell | Wayland `zwlr_layer_shell_v1` 客户端 |
 
 ## 从源码构建

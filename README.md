@@ -15,7 +15,7 @@ output as a regular surface, with zero-copy GPU sharing via DMA-BUF.
 - **gobject plugin** — Helper for building `GdkTexture` through `waywallen-display`.
 - **KDE Plasma wallpaper extension** — Plasma 6 kpackage built on the QML
   plugin.
-- **GNOME Shell extension** — Shell 48+ extension built on gobject plugin.
+- **GNOME Shell extension** — Shell 48–51 extension built on gobject plugin.
 - **Wayland layer-shell client** — standalone
   wallpaper client for compositors that expose `zwlr_layer_shell_v1`.
 
@@ -58,7 +58,7 @@ kpackagetool6 --type Plasma/Wallpaper -i waywallen-kde-<version>-<arch>-embed.zi
 
 ### GNOME Shell extension
 
-GNOME Shell on Wayland (tested on Shell 50). Download `waywallen-gnome-<version>-<arch>.zip` from the
+GNOME Shell 48–51 on Wayland (tested on Shell 50 and 51). Download `waywallen-gnome-<version>-<arch>.zip` from the
 latest release, then:
 
 ```sh
@@ -98,7 +98,7 @@ waywallen-layer-shell --socket "$XDG_RUNTIME_DIR/waywallen/display.sock"
 | Extension | Notes |
 |------------|----------|
 | [kde](./extensions/kde) | Plasma 6 wallpaper plugin |
-| [gnome](./extensions/gnome) | GNOME Shell 48–50 extension (Wayland) |
+| [gnome](./extensions/gnome) | GNOME Shell 48–51 extension (Wayland) |
 | layer-shell | Client for wayland `zwlr_layer_shell_v1` |
 
 ## Building from source

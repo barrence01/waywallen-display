@@ -1,3 +1,23 @@
+<release version="0.4.1" date="2026-10-06">
+  <description>
+    <p>Added:</p>
+    <ul>
+      <li>Support GNOME Shell 51.</li>
+      <li>Support daemon-configured window exclusions with wildcard matching across display integrations.</li>
+      <li>Support wallpaper flips in the QML display integration.</li>
+    </ul>
+    <p>Fixed:</p>
+    <ul>
+      <li>Use consistent monotonic timestamps for pointer events and track GNOME pointer motion across windows and outputs. #62 by @LostAttractor</li>
+      <li>Refresh GNOME window coverage correctly during overview, Show Desktop, and monitor changes. #63 by @LostAttractor</li>
+      <li>Refresh existing Blur my Shell static panel backgrounds. #64 by @LostAttractor</li>
+      <li>Hide the static GNOME overview backdrop behind translucent live wallpapers. #66 by @NB-Group</li>
+      <li>Clean up GNOME live wallpaper actors and reattach renderer windows correctly.</li>
+      <li>Use the effective device pixel ratio for KDE fractional Wayland scaling. #58 by @LuanVSO</li>
+      <li>Prevent a Qt assertion when connecting device pixel ratio change signals.</li>
+    </ul>
+  </description>
+</release>
 <release version="0.4.0" date="2026-09-21">
   <description>
     <p>Added:</p>

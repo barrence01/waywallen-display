@@ -16,7 +16,7 @@ GNOME Shell и другим оболочкам Linux отображать выв
 - **Модуль GObject** — вспомогательный модуль для создания `GdkTexture` через
   `waywallen-display`.
 - **Расширение обоев KDE Plasma** — пакет Plasma 6 на основе модуля QML.
-- **Расширение GNOME Shell** — расширение Shell 48+ на основе модуля GObject.
+- **Расширение GNOME Shell** — расширение Shell 48–51 на основе модуля GObject.
 - **Клиент Wayland layer-shell** — отдельный клиент обоев для композиторов,
   предоставляющих `zwlr_layer_shell_v1`.
 
@@ -60,7 +60,7 @@ kpackagetool6 --type Plasma/Wallpaper -i waywallen-kde-<версия>-<архи�
 
 ### Расширение GNOME Shell
 
-Для GNOME Shell в сеансе Wayland (проверено на Shell 50) загрузите
+Для GNOME Shell 48–51 в сеансе Wayland (проверено на Shell 50 и 51) загрузите
 `waywallen-gnome-<версия>-<архитектура>.zip` из последнего выпуска:
 
 ```sh
@@ -100,7 +100,7 @@ waywallen-layer-shell --socket "$XDG_RUNTIME_DIR/waywallen/display.sock"
 | Расширение | Описание |
 |------------|----------|
 | [kde](./extensions/kde) | Модуль обоев Plasma 6 |
-| [gnome](./extensions/gnome) | Расширение GNOME Shell 48–50 для Wayland |
+| [gnome](./extensions/gnome) | Расширение GNOME Shell 48–51 для Wayland |
 | layer-shell | Клиент Wayland `zwlr_layer_shell_v1` |
 
 ## Сборка из исходного кода
