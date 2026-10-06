@@ -850,11 +850,12 @@ static int handler_import_failure(int client_fd, struct test_state* ts) {
 static int handler_pointer_timestamps(int client_fd, struct test_state* ts) {
     if (complete_handshake_capture_caps(client_fd, ts) != 0) return -1;
     for (int i = 0; i < 4; ++i) {
-        uint8_t body[128];
+        uint8_t  body[128];
         uint16_t op;
-        size_t body_len, n_fds;
-        int fds[4];
-        if (ww_codec_recv_request(client_fd, &op, body, sizeof(body), &body_len, fds, 4, &n_fds) != 0)
+        size_t   body_len, n_fds;
+        int      fds[4];
+        if (ww_codec_recv_request(client_fd, &op, body, sizeof(body), &body_len, fds, 4, &n_fds) !=
+            0)
             return -1;
         if (op == WW_REQ_POINTER_MOTION) {
             ww_req_pointer_motion_t request;
@@ -1814,8 +1815,8 @@ static void test_vulkan_requirements_are_complete(void) {
 static void test_pointer_timestamps_use_monotonic_time_and_preserve_64_bits(void) {
     struct test_state ts;
     ts_init(&ts);
-    pthread_t srv = spawn_server(&ts, handler_pointer_timestamps);
-    waywallen_display_t* d = make_client(&ts);
+    pthread_t            srv = spawn_server(&ts, handler_pointer_timestamps);
+    waywallen_display_t* d   = make_client(&ts);
     assert(begin_test_display(d, ts.sock_path, 640, 480) == WAYWALLEN_OK);
     assert(drive_handshake(d, 2000) == WAYWALLEN_OK);
 
@@ -1825,7 +1826,8 @@ static void test_pointer_timestamps_use_monotonic_time_and_preserve_64_bits(void
     assert(waywallen_display_send_pointer_button(
                d, 10.0f, 20.0f, 272, WAYWALLEN_POINTER_BUTTON_STATE_PRESSED, 0, 0) == WAYWALLEN_OK);
     assert(waywallen_display_send_pointer_axis(
-               d, 10.0f, 20.0f, 0.0f, 1.0f, WAYWALLEN_POINTER_AXIS_SOURCE_WHEEL, 0, 0) == WAYWALLEN_OK);
+               d, 10.0f, 20.0f, 0.0f, 1.0f, WAYWALLEN_POINTER_AXIS_SOURCE_WHEEL, 0, 0) ==
+           WAYWALLEN_OK);
     const uint64_t unwrapped = (UINT64_C(1) << 32) * 1000 + 42;
     assert(waywallen_display_send_pointer_motion(d, 30.0f, 20.0f, unwrapped, 0) == WAYWALLEN_OK);
     while (waywallen_display_wants_writable(d)) {

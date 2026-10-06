@@ -1970,7 +1970,9 @@ int waywallen_display_send_pointer_button(waywallen_display_t* d, float x, float
          state != WAYWALLEN_POINTER_BUTTON_STATE_PRESSED)) {
         return WAYWALLEN_ERR_INVAL;
     }
-    ww_req_pointer_button_t msg = { x, y, button, state, pointer_timestamp(timestamp_us), modifiers };
+    ww_req_pointer_button_t msg = {
+        x, y, button, state, pointer_timestamp(timestamp_us), modifiers
+    };
     return outbox_enqueue_request(
         d, WW_OUTBOX_ORDERED, WW_REQ_POINTER_BUTTON, enc_pointer_button, &msg);
 }
@@ -1987,9 +1989,9 @@ int waywallen_display_send_pointer_axis(waywallen_display_t* d, float x, float y
          source != WAYWALLEN_POINTER_AXIS_SOURCE_CONTINUOUS)) {
         return WAYWALLEN_ERR_INVAL;
     }
-    ww_req_pointer_axis_t msg = {
-        x, y, delta_x, delta_y, source, pointer_timestamp(timestamp_us), modifiers
-    };
+    ww_req_pointer_axis_t msg = { x,        y,      delta_x,
+                                  delta_y,  source, pointer_timestamp(timestamp_us),
+                                  modifiers };
     return outbox_enqueue_request(
         d, WW_OUTBOX_ORDERED, WW_REQ_POINTER_AXIS, enc_pointer_axis, &msg);
 }

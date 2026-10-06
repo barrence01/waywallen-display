@@ -870,9 +870,9 @@ bool WaywallenDisplay::eventFilter(QObject* obj, QEvent* ev) {
         if (! toSurface(me->scenePosition(), px, py)) return false;
         const uint32_t code = qtButtonToLinuxCode(me->button());
         if (code == 0) return false;
-        const auto     state = (ev->type() == QEvent::MouseButtonPress)
-                                   ? WAYWALLEN_POINTER_BUTTON_STATE_PRESSED
-                                   : WAYWALLEN_POINTER_BUTTON_STATE_RELEASED;
+        const auto state = (ev->type() == QEvent::MouseButtonPress)
+                               ? WAYWALLEN_POINTER_BUTTON_STATE_PRESSED
+                               : WAYWALLEN_POINTER_BUTTON_STATE_RELEASED;
         (void)waywallen_display_send_pointer_button(
             display, px, py, code, state, 0, qtModifiers(me->modifiers()));
         break;
